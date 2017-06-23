@@ -129,6 +129,23 @@ def get_header_checksum(header):
     return sum(map(lambda x: x if PY3 else ord(x), data))
 
 
+def read_file_in_chunks(in_file, file_size, chunk_size=8 * 1024):
+    """Read file in chunks"""
+    read_bytes = 0
+    while True:
+        if read_bytes > file_size - chunk_size:
+            # read last chunk
+            chunk = in_file.read(file_size - read_bytes)
+        else:
+            # read chunk
+            chunk = in_file.read(chunk_size)
+        read_bytes += len(chunk)
+        if chunk:
+            yield chunk
+        else:
+            return
+
+
 def create(archive, file_or_dir, verbose=False):
     """Create archive"""
     if verbose:
@@ -169,19 +186,20 @@ def extract(archive, dest_path='./out', verbose=False):
             if not name:
                 break
             file_size = int(tar_header.size, 8)
-            data = in_file.read(file_size)  # TODO: read a file in chunks
             out_path = os.path.join(dest_path, name.decode(SYSTEM_ENCODING) if PY3 else name)
             if verbose:
                 print('Extracting file "{}"'.format(out_path))
             if tar_header.typeflag.decode('latin') in (TAR_TYPE_REGULAR_FILE, TAR_TYPE_REGULAR_FILE_ALIAS):
                 with open(out_path, 'wb') as f:
-                    f.write(data)  # TODO: write a file in chunks
+                    # write a file in chunks
+                    for chunk in read_file_in_chunks(in_file, file_size):
+                        f.write(chunk)
             elif tar_header.typeflag.decode('latin') == TAR_TYPE_DIR:
                 try:
                     os.makedirs(out_path)
                 except OSError:
                     pass
-            padding_size = (int(math.ceil(file_size / 512.0) * 512) - file_size)
+            padding_size = int(math.ceil(file_size / 512.0) * 512) - file_size
             in_file.read(padding_size)
     return True
 
@@ -208,7 +226,7 @@ def add(archive, filename, verbose=False):
         typeflag = TAR_TYPE_REGULAR_FILE
     elif stat.S_ISLNK(file_mode):
         linkname = os.path.realpath(filename)
-        # check hard link
+        # TODO: check hard link
         typeflag = TAR_TYPE_HARDLINK if is_hard_link(filename) else TAR_TYPE_SYMLINK
     elif stat.S_ISCHR(file_mode):
         typeflag = TAR_TYPE_CHAR
@@ -218,13 +236,6 @@ def add(archive, filename, verbose=False):
         typeflag = TAR_TYPE_DIR
     elif stat.S_ISFIFO(file_mode):
         typeflag = TAR_TYPE_FIFO
-
-    # read data
-    file_data = ''
-    if typeflag in (TAR_TYPE_REGULAR_FILE, TAR_TYPE_HARDLINK, TAR_TYPE_SYMLINK):
-        with open(filename, 'rb') as f:
-            file_data = f.read()  # TODO: read a file in chunks
-    # TODO: other modes
 
     mode = 'ab' if os.path.exists(archive) else 'wb'
     with open(archive, mode) as out:
@@ -251,10 +262,15 @@ def add(archive, filename, verbose=False):
         # write header
         out.write(tar_header)
         # write data if any
-        if file_data:
-            out.write(file_data)  # TODO: write a file in chunks
+        file_size = os.path.getsize(filename)
+        # TODO: other modes
+        if typeflag in (TAR_TYPE_REGULAR_FILE, TAR_TYPE_HARDLINK, TAR_TYPE_SYMLINK) and file_size:
+            with open(filename, 'rb') as in_file:
+                # write a file in chunks
+                for chunk in read_file_in_chunks(in_file, file_size):
+                    out.write(chunk)
         # add padding
-        out.write(((int(math.ceil(len(file_data) / 512.0) * 512) - len(file_data)) * '\x00').encode('latin'))
+        out.write(((int(math.ceil(file_size / 512.0) * 512) - file_size) * '\x00').encode('latin'))
     return True
 
 
@@ -278,7 +294,7 @@ def list_content(archive, verbose=False):
                 ' -> {}'.format(tar_header.linkname.strip()) if tar_header.linkname.strip() else ''
             ))
             f.read(file_size)
-            padding_size = (int(math.ceil(file_size / 512.0) * 512) - file_size)
+            padding_size = int(math.ceil(file_size / 512.0) * 512) - file_size
             f.read(padding_size)
     return True
 
@@ -300,6 +316,9 @@ def main():
     if not any_action or (any_action and not args.file) or ((args.add or args.create) and not args.file_or_dir):
         parser.print_help()
         exit(1)
+
+    if (args.extract and not args.file_or_dir):
+        args.file_or_dir = './out'
 
     if not os.path.isfile(args.file):
         exit('No such file: "{}"'.format(args.file))
