@@ -293,7 +293,7 @@ def main():
     act_group.add_argument('-x', '--extract', dest='extract', action='store_true', help='extract files from an archive')
     parser.add_argument('-f', '--file', dest='file', help='in/out tar file')
     parser.add_argument('-v', '--verbose', dest='verbose', help='verbose mode', action='store_true', default=False)
-    parser.add_argument('file_or_dir', metavar='file/dir', help='file or directory to add/compress', nargs='?')
+    parser.add_argument('file_or_dir', metavar='file/dir', help='file or directory to add/create/extract', nargs='?')
     args = parser.parse_args()
 
     any_action = any([args.add, args.create, args.list, args.extract])
