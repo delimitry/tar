@@ -31,6 +31,7 @@ TAR_TYPE_CONTIGUOUS = '7'  # Contiguous file
 
 TYPE_FLAGS = {
     TAR_TYPE_REGULAR_FILE: '-',
+    TAR_TYPE_REGULAR_FILE_ALIAS: '-',
     TAR_TYPE_HARDLINK: 'h',
     TAR_TYPE_SYMLINK: 'l',
     TAR_TYPE_CHAR: 'c',
@@ -70,8 +71,7 @@ class TarHeader(ctypes.Structure):
 def permission_bits(str_value, typeflag):
     """Format type flag and permission bits"""
     value = int(str_value, 8)
-    # typeflag
-    res = TYPE_FLAGS.get(typeflag, '-')
+    res = TYPE_FLAGS.get(chr(ord(typeflag)), '?')
     # user
     res += 'r' if (value >> 6) & 0b100 else '-'
     res += 'w' if (value >> 6) & 0b010 else '-'
@@ -155,7 +155,7 @@ def create(archive, file_or_dir, verbose=False):
         return False
 
     # overwrite file on archive creation
-    open(archive, 'wb')
+    open(archive, 'wb').close()
 
     result = True
     if os.path.isfile(file_or_dir):
@@ -172,7 +172,7 @@ def create(archive, file_or_dir, verbose=False):
 
 
 def extract(archive, dest_path='./out', verbose=False):
-    """Extract"""
+    """Extract files from archive"""
     if verbose:
         print('Extracting files from archive "{}"'.format(archive))
     if not os.path.exists(dest_path):
@@ -219,7 +219,7 @@ def add(archive, filename, verbose=False):
 
     # set file type
     linkname = ''
-    typeflag = TAR_TYPE_REGULAR_FILE
+    typeflag = ''
     file_stat = os.stat(filename)
     file_mode = file_stat.st_mode
     if stat.S_ISREG(file_mode):
@@ -247,7 +247,7 @@ def add(archive, filename, verbose=False):
         tar_header.size = '{:011o}'.format(file_stat.st_size if typeflag != TAR_TYPE_DIR else 0).encode('latin')
         tar_header.mtime = '{:o}'.format(int(file_stat.st_mtime)).encode('latin')
         tar_header.chksum = (' ' * 8).encode('latin')  # 8 spaces before real checksum calculation
-        tar_header.typeflag = ord(typeflag) if PY3 else typeflag
+        tar_header.typeflag = typeflag.encode('latin') if PY3 else typeflag
         tar_header.linkname = linkname[:99].encode(SYSTEM_ENCODING) if PY3 else linkname[:99]
         tar_header.magic = 'ustar\x00'.encode('latin')
         tar_header.version = '00'.encode('latin')
