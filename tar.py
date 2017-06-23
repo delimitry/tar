@@ -169,13 +169,13 @@ def extract(archive, dest_path='./out', verbose=False):
             if not name:
                 break
             file_size = int(tar_header.size, 8)
-            data = in_file.read(file_size)
+            data = in_file.read(file_size)  # TODO: read a file in chunks
             out_path = os.path.join(dest_path, name.decode(SYSTEM_ENCODING) if PY3 else name)
             if verbose:
                 print('Extracting file "{}"'.format(out_path))
             if tar_header.typeflag.decode('latin') in (TAR_TYPE_REGULAR_FILE, TAR_TYPE_REGULAR_FILE_ALIAS):
                 with open(out_path, 'wb') as f:
-                    f.write(data)
+                    f.write(data)  # TODO: write a file in chunks
             elif tar_header.typeflag.decode('latin') == TAR_TYPE_DIR:
                 try:
                     os.makedirs(out_path)
@@ -223,7 +223,7 @@ def add(archive, filename, verbose=False):
     file_data = ''
     if typeflag in (TAR_TYPE_REGULAR_FILE, TAR_TYPE_HARDLINK, TAR_TYPE_SYMLINK):
         with open(filename, 'rb') as f:
-            file_data = f.read()
+            file_data = f.read()  # TODO: read a file in chunks
     # TODO: other modes
 
     mode = 'ab' if os.path.exists(archive) else 'wb'
@@ -252,7 +252,7 @@ def add(archive, filename, verbose=False):
         out.write(tar_header)
         # write data if any
         if file_data:
-            out.write(file_data)
+            out.write(file_data)  # TODO: write a file in chunks
         # add padding
         out.write(((int(math.ceil(len(file_data) / 512.0) * 512) - len(file_data)) * '\x00').encode('latin'))
     return True
